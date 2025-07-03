@@ -1,0 +1,117 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:video_player/video_player.dart';
+
+class VideoFeedScreen extends StatefulWidget {
+  const VideoFeedScreen({super.key});
+
+  @override
+  State<VideoFeedScreen> createState() => _VideoFeedScreenState();
+}
+
+class _VideoFeedScreenState extends State<VideoFeedScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Skill Feed')),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('videos')
+            .orderBy('uploadDate', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text('No videos uploaded yet.'));
+          }
+
+          final docs = snapshot.data!.docs;
+
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+              return VideoCard(
+                title: data['title'] ?? 'Untitled',
+                url: data['path'] ?? '',
+                uploader: data['uploaderName'] ?? 'Unknown',
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class VideoCard extends StatefulWidget {
+  final String title;
+  final String url;
+  final String uploader;
+
+  const VideoCard({
+    super.key,
+    required this.title,
+    required this.url,
+    required this.uploader,
+  });
+
+  @override
+  State<VideoCard> createState() => _VideoCardState();
+}
+
+class _VideoCardState extends State<VideoCard> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.network(widget.url)
+      ..initialize().then((_) {
+        setState(() => _initialized = true);
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_initialized)
+            AspectRatio(
+              aspectRatio: _controller.value.aspectRatio,
+              child: VideoPlayer(_controller),
+            )
+          else
+            const SizedBox(
+              height: 200,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ListTile(
+            title: Text(widget.title),
+            subtitle: Text("By ${widget.uploader}"),
+            trailing: IconButton(
+              icon: Icon(
+                  _controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
+              onPressed: () {
+                setState(() {
+                  _controller.value.isPlaying
+                      ? _controller.pause()
+                      : _controller.play();
+                });
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

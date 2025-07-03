@@ -1,0 +1,107 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+
+class YouTubeSearchScreen extends StatefulWidget {
+  const YouTubeSearchScreen({super.key});
+
+  @override
+  State<YouTubeSearchScreen> createState() => _YouTubeSearchScreenState();
+}
+
+class _YouTubeSearchScreenState extends State<YouTubeSearchScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  List _videos = [];
+  bool _isLoading = false;
+
+  // 🔑 Replace this with your actual API key from Google Cloud Console
+  final String apiKey = 'YOUR_YOUTUBE_API_KEY';
+
+  Future<void> _searchVideos(String query) async {
+    setState(() => _isLoading = true);
+
+    final url = Uri.parse(
+      'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=10&q=$query&key=$apiKey',
+    );
+
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      setState(() {
+        _videos = data['items'];
+        _isLoading = false;
+      });
+    } else {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to fetch videos')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Search Skill Videos")),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: "Search e.g. haircut tutorial",
+                border: OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.search),
+                  onPressed: () {
+                    final query = _searchController.text.trim();
+                    if (query.isNotEmpty) {
+                      _searchVideos(query);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+          if (_isLoading) const LinearProgressIndicator(),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _videos.length,
+              itemBuilder: (context, index) {
+                final video = _videos[index];
+                final videoId = video['id']['videoId'];
+                final title = video['snippet']['title'];
+                final thumbnail = video['snippet']['thumbnails']['high']['url'];
+
+                return Card(
+                  margin: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        leading: Image.network(thumbnail, width: 100),
+                        title: Text(title),
+                      ),
+                      YoutubePlayer(
+                        controller: YoutubePlayerController(
+                          initialVideoId: videoId,
+                          flags: const YoutubePlayerFlags(
+                            autoPlay: false,
+                            mute: false,
+                          ),
+                        ),
+                        showVideoProgressIndicator: true,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
